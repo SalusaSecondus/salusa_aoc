@@ -1,4 +1,6 @@
-use std::{collections::HashMap, hash::Hash, borrow::Borrow, fmt::Display};
+use std::{borrow::Borrow, collections::HashMap, fmt::Display, hash::Hash};
+
+use min_max_heap::MinMaxHeap;
 
 pub trait MatrixTranspose {
     fn transpose(&self) -> Self;
@@ -125,33 +127,31 @@ where
     }
 }
 
-
 pub struct ReplacementEngine<T>
 where
     T: Hash + Eq + Clone + 'static,
 {
     pub elements: HashMap<T, u64>,
-    rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>>
+    rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>>,
 }
 
 impl<T> ReplacementEngine<T>
 where
-    T: Hash + Eq + Clone + 'static
+    T: Hash + Eq + Clone + 'static,
 {
-    pub fn from_fn<F>(elements: HashMap<T, u64>, rule: F) -> Self 
+    pub fn from_fn<F>(elements: HashMap<T, u64>, rule: F) -> Self
     where
-    F: Fn(&T) -> Option<Vec<(T, u64)>> + 'static
+        F: Fn(&T) -> Option<Vec<(T, u64)>> + 'static,
     {
         let rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>> = Box::new(rule);
 
-        
         Self { elements, rule }
     }
 
     pub fn from_hash(elements: HashMap<T, u64>, rules: HashMap<T, Vec<(T, u64)>>) -> Self {
-        let rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>> = Box::new(move |src| rules.get(src).map(|o| o.to_owned()));
+        let rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>> =
+            Box::new(move |src| rules.get(src).map(|o| o.to_owned()));
 
-        
         Self { elements, rule }
     }
 
@@ -165,5 +165,73 @@ where
             }
         }
         self.elements = result;
+    }
+}
+
+pub trait SalusaAocIter: Iterator {
+    fn max_n(self, size: usize) -> MinMaxHeap<Self::Item>;
+    fn min_n(self, size: usize) -> MinMaxHeap<Self::Item>;
+}
+
+impl<T: Iterator> SalusaAocIter for T
+where
+    T::Item: Ord + PartialOrd + Copy,
+{
+    fn max_n(self, size: usize) -> MinMaxHeap<Self::Item> {
+        let mut heap = MinMaxHeap::with_capacity(size + 1);
+
+        for item in self {
+            if heap.len() < size {
+                heap.push(item);
+            } else if let Some(curr_min) = heap.peek_min() {
+                if *curr_min < item {
+                    heap.push(item);
+                    if heap.len() > size {
+                        heap.pop_min();
+                    }
+                }
+            }
+        }
+        heap
+    }
+
+    fn min_n(self, size: usize) -> MinMaxHeap<Self::Item> {
+        let mut heap = MinMaxHeap::with_capacity(size + 1);
+
+        for item in self {
+            if heap.len() < size {
+                heap.push(item);
+            } else if let Some(curr_max) = heap.peek_max() {
+                if *curr_max > item {
+                    heap.push(item);
+                    if heap.len() > size {
+                        heap.pop_max();
+                    }
+                }
+            }
+        }
+        heap
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::SalusaAocIter;
+
+    #[test]
+    fn test_min_max() {
+        let samples = vec![97, 67, 18, 2, 42, 91, 75, 77, 87, 35, 81, 89, 39, 79, 5, 0];
+
+        let mut sorted = samples.clone();
+        sorted.sort_unstable();
+        let sorted = sorted;
+
+        for len in 0..=samples.len() {
+            let min: Vec<i32> = samples.iter().min_n(len).drain_asc().copied().collect();
+            let max: Vec<i32> = samples.iter().max_n(len).drain_asc().copied().collect();
+
+            assert_eq!(min, sorted[0..len].to_vec());
+            assert_eq!(max, sorted[samples.len() - len..samples.len()].to_vec());
+        }
     }
 }
