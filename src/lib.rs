@@ -1,6 +1,12 @@
-use std::{borrow::Borrow, collections::HashMap, fmt::Display, hash::Hash};
+use std::{
+    borrow::Borrow,
+    collections::{BinaryHeap, HashMap},
+    fmt::Display,
+    hash::Hash,
+};
 
 use min_max_heap::MinMaxHeap;
+use num_traits::{One, Zero};
 
 pub trait MatrixTranspose {
     fn transpose(&self) -> Self;
@@ -39,18 +45,50 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Graph<T>
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EdgeWeight<T, W>
 where
     T: Clone + Eq + Hash,
+    W: Copy + Eq + Hash + Ord + One + Zero,
 {
-    digraph: bool,
-    map: HashMap<T, Vec<T>>,
+    dest: T,
+    weight: W,
 }
 
-impl<T> Graph<T>
+impl<T, W> PartialOrd for EdgeWeight<T, W>
 where
     T: Clone + Eq + Hash,
+    W: Copy + Eq + Hash + Ord + One + Zero,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T, W> Ord for EdgeWeight<T, W>
+where
+    T: Clone + Eq + Hash,
+    W: Copy + Eq + Hash + Ord + One + Zero,
+{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.weight.cmp(&self.weight)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Graph<T, W>
+where
+    T: Clone + Eq + Hash,
+    W: Copy + Eq + Hash + Ord + One + Zero,
+{
+    digraph: bool,
+    map: HashMap<T, Vec<EdgeWeight<T, W>>>,
+}
+
+impl<T, W> Graph<T, W>
+where
+    T: Clone + Eq + Hash,
+    W: Copy + Eq + Ord + Hash + One + Zero,
 {
     pub fn new(digraph: bool) -> Self {
         Self {
@@ -61,27 +99,81 @@ where
 
     pub fn add_edge(&mut self, from: T, to: T) {
         if self.digraph {
-            self.map.entry(to.clone()).or_default().push(from.clone());
+            self.map.entry(to.clone()).or_default().push(EdgeWeight {
+                dest: from.clone(),
+                weight: W::one(),
+            });
         }
-        self.map.entry(from).or_default().push(to);
+        self.map.entry(from).or_default().push(EdgeWeight {
+            dest: to,
+            weight: W::one(),
+        });
     }
 
-    pub fn nodes(&self) -> std::collections::hash_map::Keys<T, Vec<T>> {
+    pub fn add_weighted_edge(&mut self, from: T, to: T, weight: W) {
+        if self.digraph {
+            self.map.entry(to.clone()).or_default().push(EdgeWeight {
+                dest: from.clone(),
+                weight,
+            });
+        }
+        self.map
+            .entry(from)
+            .or_default()
+            .push(EdgeWeight { dest: to, weight });
+    }
+
+    pub fn nodes(&self) -> std::collections::hash_map::Keys<T, Vec<EdgeWeight<T, W>>> {
         self.map.keys()
     }
 
-    pub fn edges<Q: ?Sized>(&self, node: &Q) -> Option<&Vec<T>>
+    pub fn edges<Q: ?Sized>(&self, node: &Q) -> Vec<T>
     where
         T: Borrow<Q>,
         Q: Hash + Eq,
     {
-        self.map.get(node)
+        if let Some(edges) = self.map.get(node) {
+            edges.iter().map(|e| e.dest.to_owned()).collect::<Vec<T>>()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn distance_map(&self, start: &T) -> HashMap<T, W> {
+        let mut result = HashMap::new();
+        let mut queue: BinaryHeap<EdgeWeight<T, W>> = BinaryHeap::new();
+        queue.push(EdgeWeight {
+            dest: start.clone(),
+            weight: W::zero(),
+        });
+
+        while let Some(current_node) = queue.pop() {
+            // let current_node = current_node.dest;
+            if result.contains_key(&current_node.dest) {
+                continue;
+            }
+            result.insert(current_node.dest.clone(), current_node.weight);
+            if let Some(edges) = self.map.get(&current_node.dest) {
+                for e in edges {
+                    if result.contains_key(&e.dest) {
+                        continue;
+                    }
+                    queue.push(EdgeWeight {
+                        dest: e.dest.clone(),
+                        weight: e.weight + current_node.weight,
+                    });
+                }
+            }
+        }
+
+        result
     }
 }
 
-impl<T> MatrixTranspose for Graph<T>
+impl<T, W> MatrixTranspose for Graph<T, W>
 where
     T: Clone + Eq + Hash,
+    W: Copy + Eq + Ord + Hash + One + Zero,
 {
     fn transpose(&self) -> Self {
         if self.digraph {
@@ -89,8 +181,8 @@ where
         } else {
             let mut result = Graph::new(self.digraph);
             for (node, edges) in &self.map {
-                for dest in edges {
-                    result.add_edge(dest.clone(), node.clone());
+                for e in edges {
+                    result.add_weighted_edge(e.dest.clone(), node.clone(), e.weight);
                 }
             }
             result
@@ -98,27 +190,29 @@ where
     }
 }
 
-impl<T> Graph<T>
+impl<T, W> Graph<T, W>
 where
     T: Ord + Clone + Eq + Hash,
+    W: Copy + Eq + Ord + Hash + One + Zero,
 {
     pub fn sort(&mut self) {
         self.map.values_mut().for_each(|v| v.sort_unstable());
     }
 }
 
-impl<T> Display for Graph<T>
+impl<T, W> Display for Graph<T, W>
 where
     T: Clone + Eq + Hash + Display,
+    W: Copy + Eq + Ord + Hash + One + Display + Zero,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for e in &self.map {
             write!(f, "{} ->", e.0)?;
             for v in e.1.iter().enumerate() {
                 if v.0 == 0 {
-                    write!(f, " {}", v.1)?;
+                    write!(f, " {}({})", v.1.dest, v.1.weight)?;
                 } else {
-                    write!(f, ", {}", v.1)?;
+                    write!(f, ", {}({})", v.1.dest, v.1.weight)?;
                 }
             }
             writeln!(f)?;
@@ -132,6 +226,7 @@ where
     T: Hash + Eq + Clone + 'static,
 {
     pub elements: HashMap<T, u64>,
+    #[allow(clippy::type_complexity)]
     rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>>,
 }
 
@@ -143,12 +238,14 @@ where
     where
         F: Fn(&T) -> Option<Vec<(T, u64)>> + 'static,
     {
+        #[allow(clippy::type_complexity)]
         let rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>> = Box::new(rule);
 
         Self { elements, rule }
     }
 
     pub fn from_hash(elements: HashMap<T, u64>, rules: HashMap<T, Vec<(T, u64)>>) -> Self {
+        #[allow(clippy::type_complexity)]
         let rule: Box<dyn Fn(&T) -> Option<Vec<(T, u64)>>> =
             Box::new(move |src| rules.get(src).map(|o| o.to_owned()));
 
