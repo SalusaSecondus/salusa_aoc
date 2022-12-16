@@ -75,6 +75,31 @@ where
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WeightedPath<T, W> where
+T: Clone + Eq + Hash,
+W: Copy + Eq + Hash + Ord {
+    dest: T,
+    weight: W,
+    path: Vec<T>
+}
+
+impl <T, W> Ord for WeightedPath<T, W>  where
+T: Clone + Eq + Hash,
+W: Copy + Eq + Hash + Ord {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.weight.cmp(&self.weight)
+    }
+}
+
+impl<T, W> PartialOrd for WeightedPath<T, W>  where
+T: Clone + Eq + Hash,
+W: Copy + Eq + Hash + Ord {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Graph<T, W>
 where
@@ -161,6 +186,43 @@ where
                     queue.push(EdgeWeight {
                         dest: e.dest.clone(),
                         weight: e.weight + current_node.weight,
+                    });
+                }
+            }
+        }
+
+        result
+    }
+
+    pub fn path_map(&self, start: &T) -> HashMap<T, (Vec<T>, W)> {
+        let mut result = HashMap::new();
+
+
+
+        let mut queue: BinaryHeap<WeightedPath<T, W>> = BinaryHeap::new();
+        queue.push(WeightedPath {
+            dest: start.clone(),
+            weight: W::zero(),
+            path: vec![]
+        });
+
+        while let Some(current_node) = queue.pop() {
+            // let current_node = current_node.dest;
+            if result.contains_key(&current_node.dest) {
+                continue;
+            }
+            result.insert(current_node.dest.clone(), (current_node.path.clone(), current_node.weight));
+            if let Some(edges) = self.map.get(&current_node.dest) {
+                for e in edges {
+                    if result.contains_key(&e.dest) {
+                        continue;
+                    }
+                    let mut path = current_node.path.clone();
+                    path.push(e.dest.clone());
+                    queue.push(WeightedPath {
+                        dest: e.dest.clone(),
+                        weight: e.weight + current_node.weight,
+                        path
                     });
                 }
             }
