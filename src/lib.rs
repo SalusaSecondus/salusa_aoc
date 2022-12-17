@@ -7,6 +7,7 @@ use std::{
 
 use min_max_heap::MinMaxHeap;
 use num_traits::{One, Zero};
+pub mod bitset;
 
 pub trait MatrixTranspose {
     fn transpose(&self) -> Self;
