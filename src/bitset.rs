@@ -4,7 +4,7 @@ use std::{
     ops::{BitAnd, BitOr, Not, Shl, Mul, Add},
 };
 
-use num_traits::{One, Unsigned, Zero};
+use num_traits::{One, Zero};
 
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, PartialOrd)]
 pub struct BitSet<T> {
