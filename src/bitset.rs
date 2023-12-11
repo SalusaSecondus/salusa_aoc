@@ -1,7 +1,7 @@
 use std::{
     fmt::Display,
     mem::size_of,
-    ops::{BitAnd, BitOr, Not, Shl, Mul, Add},
+    ops::{Add, BitAnd, BitOr, Mul, Not, Shl},
 };
 
 use num_traits::{One, Zero};
@@ -15,7 +15,7 @@ pub struct BitSet<T> {
 pub struct Iter<T> {
     set: BitSet<T>,
     curr: u8,
-    done: bool
+    done: bool,
 }
 
 impl<T> BitSet<T>
@@ -49,13 +49,13 @@ where
     }
 
     pub fn remove(&mut self, value: &u8) -> bool {
-        let result = self.contains(&value);
+        let result = self.contains(value);
         self.val = self.val & !Self::mask(*value);
         result
     }
 
     pub const fn max_val() -> u8 {
-        ((size_of::<T>() * 8)  - 1) as u8
+        ((size_of::<T>() * 8) - 1) as u8
     }
 
     fn mask(value: u8) -> T {
@@ -182,11 +182,19 @@ impl<T> Iter<T> {
         let mut curr = 0;
         while curr <= BitSet::<T>::max_val() && !set.contains(&curr) {
             if curr == BitSet::<T>::max_val() {
-                return Self {set: *set, curr: 0, done: true};
+                return Self {
+                    set: *set,
+                    curr: 0,
+                    done: true,
+                };
             }
             curr += 1;
         }
-        Self { set: *set, curr, done: false}
+        Self {
+            set: *set,
+            curr,
+            done: false,
+        }
     }
 }
 
@@ -254,7 +262,7 @@ where
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Bs256 {
     high: u128,
-    low: u128
+    low: u128,
 }
 
 impl One for Bs256 {
@@ -262,8 +270,7 @@ impl One for Bs256 {
         Bs256 { high: 0, low: 1 }
     }
 
-    fn is_one(&self) -> bool
-    {
+    fn is_one(&self) -> bool {
         self.high.is_zero() && self.low.is_one()
     }
 }
@@ -300,9 +307,15 @@ impl Shl<u8> for Bs256 {
     fn shl(self, rhs: u8) -> Self::Output {
         assert!(self.is_one());
         if rhs >= 128 {
-            Bs256 {high: 1 << (rhs - 128), low: 0}
+            Bs256 {
+                high: 1 << (rhs - 128),
+                low: 0,
+            }
         } else {
-            Bs256 {high: 0, low: 1 << rhs}
+            Bs256 {
+                high: 0,
+                low: 1 << rhs,
+            }
         }
     }
 }
@@ -311,7 +324,10 @@ impl BitAnd for Bs256 {
     type Output = Bs256;
 
     fn bitand(self, rhs: Self) -> Self::Output {
-        Bs256 { high: self.high & rhs.high, low: self.low & rhs.low}
+        Bs256 {
+            high: self.high & rhs.high,
+            low: self.low & rhs.low,
+        }
     }
 }
 
@@ -319,7 +335,10 @@ impl BitOr for Bs256 {
     type Output = Bs256;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        Bs256 { high: self.high | rhs.high, low: self.low | rhs.low}
+        Bs256 {
+            high: self.high | rhs.high,
+            low: self.low | rhs.low,
+        }
     }
 }
 
@@ -327,7 +346,10 @@ impl Not for Bs256 {
     type Output = Bs256;
 
     fn not(self) -> Self::Output {
-        Bs256{high: !self.high, low: !self.low}
+        Bs256 {
+            high: !self.high,
+            low: !self.low,
+        }
     }
 }
 

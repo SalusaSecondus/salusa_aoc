@@ -3,11 +3,91 @@ use std::{
     collections::{BinaryHeap, HashMap},
     fmt::Display,
     hash::Hash,
+    ops::{AddAssign, Div, Mul, MulAssign, Sub},
 };
 
 use min_max_heap::MinMaxHeap;
 use num_traits::{One, Zero};
 pub mod bitset;
+
+pub struct LagrangePolynomial<T> {
+    pub coords: Vec<(T, T)>,
+}
+
+impl<T> LagrangePolynomial<T>
+where
+    T: Mul<Output = T>
+        + Div<Output = T>
+        + Clone
+        + Zero
+        + AddAssign
+        + One
+        + Sub<Output = T>
+        + MulAssign
+        + Display,
+    for<'a> &'a T: Div<Output = T> + Sub<Output = T>,
+{
+    pub fn new(coords: &[(T, T)]) -> LagrangePolynomial<T>
+    where
+        T: Mul<Output = T>
+            + Div<Output = T>
+            + Clone
+            + Zero
+            + AddAssign
+            + One
+            + Sub<Output = T>
+            + MulAssign,
+        for<'a> &'a T: Div<Output = T> + Sub<Output = T>,
+    {
+        let coords = coords.to_owned();
+        Self { coords }
+    }
+
+    pub fn from_y(y: &[T]) -> LagrangePolynomial<T>
+    where
+        T: Mul<Output = T>
+            + Div<Output = T>
+            + Clone
+            + Zero
+            + AddAssign
+            + One
+            + Sub<Output = T>
+            + MulAssign,
+        for<'a> &'a T: Div<Output = T> + Sub<Output = T>,
+    {
+        let mut coords = vec![];
+        let mut x = T::zero();
+        for val in y {
+            coords.push((x.to_owned(), val.to_owned()));
+            x += T::one();
+        }
+        Self::new(&coords)
+    }
+
+    pub fn eval(&self, x: T) -> T {
+        let mut result = T::zero();
+        for i in 0..self.coords.len() {
+            result += self.piece(i, &x);
+            // println!("Partial: {}", result);
+        }
+        result
+    }
+
+    fn piece(&self, i: usize, x: &T) -> T {
+        let x_i = &self.coords[i].0;
+        let y_i = &self.coords[i].1;
+        let mut numerator = T::one();
+        let mut denominator = T::one();
+        for (idx, point) in self.coords.iter().enumerate() {
+            if idx != i {
+                numerator *= x - &point.0;
+                denominator *= x_i - &point.0;
+            }
+        }
+        // println!("Num: {}, Denom: {}, y: {}", numerator, denominator, y_i);
+        (numerator * y_i.to_owned()) / denominator
+    }
+}
 
 pub trait MatrixTranspose {
     fn transpose(&self) -> Self;
@@ -77,25 +157,31 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct WeightedPath<T, W> where
-T: Clone + Eq + Hash,
-W: Copy + Eq + Hash + Ord {
+struct WeightedPath<T, W>
+where
+    T: Clone + Eq + Hash,
+    W: Copy + Eq + Hash + Ord,
+{
     dest: T,
     weight: W,
-    path: Vec<T>
+    path: Vec<T>,
 }
 
-impl <T, W> Ord for WeightedPath<T, W>  where
-T: Clone + Eq + Hash,
-W: Copy + Eq + Hash + Ord {
+impl<T, W> Ord for WeightedPath<T, W>
+where
+    T: Clone + Eq + Hash,
+    W: Copy + Eq + Hash + Ord,
+{
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         other.weight.cmp(&self.weight)
     }
 }
 
-impl<T, W> PartialOrd for WeightedPath<T, W>  where
-T: Clone + Eq + Hash,
-W: Copy + Eq + Hash + Ord {
+impl<T, W> PartialOrd for WeightedPath<T, W>
+where
+    T: Clone + Eq + Hash,
+    W: Copy + Eq + Hash + Ord,
+{
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
@@ -198,13 +284,11 @@ where
     pub fn path_map(&self, start: &T) -> HashMap<T, (Vec<T>, W)> {
         let mut result = HashMap::new();
 
-
-
         let mut queue: BinaryHeap<WeightedPath<T, W>> = BinaryHeap::new();
         queue.push(WeightedPath {
             dest: start.clone(),
             weight: W::zero(),
-            path: vec![]
+            path: vec![],
         });
 
         while let Some(current_node) = queue.pop() {
@@ -212,7 +296,10 @@ where
             if result.contains_key(&current_node.dest) {
                 continue;
             }
-            result.insert(current_node.dest.clone(), (current_node.path.clone(), current_node.weight));
+            result.insert(
+                current_node.dest.clone(),
+                (current_node.path.clone(), current_node.weight),
+            );
             if let Some(edges) = self.map.get(&current_node.dest) {
                 for e in edges {
                     if result.contains_key(&e.dest) {
@@ -223,7 +310,7 @@ where
                     queue.push(WeightedPath {
                         dest: e.dest.clone(),
                         weight: e.weight + current_node.weight,
-                        path
+                        path,
                     });
                 }
             }
@@ -376,7 +463,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::SalusaAocIter;
+    use crate::{LagrangePolynomial, SalusaAocIter};
 
     #[test]
     fn test_min_max() {
@@ -393,5 +480,26 @@ mod tests {
             assert_eq!(min, sorted[0..len].to_vec());
             assert_eq!(max, sorted[samples.len() - len..samples.len()].to_vec());
         }
+    }
+
+    #[test]
+    fn test_lagrange() {
+        let y = vec![0.0, 3.0, 6.0, 9.0, 12.0, 15.0];
+        let poly = LagrangePolynomial::from_y(&y);
+        for (x, expected) in y.iter().enumerate() {
+            let actual: f64 = poly.eval(x as f64);
+            assert_eq!(*expected, actual);
+        }
+        assert_eq!(18.0, poly.eval(6.0));
+        assert_eq!(-3.0, poly.eval(-1.0));
+
+        let y = vec![1f64, 3f64, 6f64, 10f64, 15f64, 21f64];
+        let poly = LagrangePolynomial::from_y(&y);
+        for (x, expected) in y.iter().enumerate() {
+            let actual: f64 = poly.eval(x as f64);
+            assert_eq!(*expected, actual);
+        }
+        assert_eq!(28.0, poly.eval(6.0));
+        assert_eq!(0.0, poly.eval(-1.0));
     }
 }
